@@ -1,0 +1,210 @@
+name: Build and Test on Multiple Platforms (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      umbrella_repo:
+        type: string
+        description: "The umbrella repository to checkout"
+        required: true
+      submodules_json:
+        type: string
+        description: "JSON with submodules' repo names and SHAs"
+        required: false
+      callback_json:
+        type: string
+        description: "JSON with auxiliary info. Contains data for callback"
+        required: false
+        default: "{\"triggered_by\": \"manual\"}"
+      ci_cd_ref:
+        type: string
+        description: "Ref for CI/CD repository"
+        required: false
+      boost_version:
+        type: string
+        description: "Version of Boost to install"
+        required: false
+        default: '1.81.0' # The least version supported by both matrix.os
+
+env:
+  TESTS_ARTIFACT_NAME: 'test-results'
+
+jobs:
+  upload-event-file:
+    name: "Upload Event File"
+    if: ${{ fromJson(inputs.callback_json).triggered_by == 'manual' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: event_file
+          path: ${{ github.event_path }}
+
+
+  upload-callback-json:
+    name: "Upload Callback JSON as file"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create callback JSON file
+        id: create-callback-file
+        run: |
+          callback_json_file="callback.json"
+          echo '${{ inputs.callback_json }}' > $callback_json_file
+          echo "callback-json-file=$callback_json_file" >> $GITHUB_OUTPUT
+          cat callback.json
+
+      - name: Upload callback JSON as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: callback-json-artifact
+          path: ${{ steps.create-callback-file.outputs.callback-json-file }}
+
+
+  build-and-test:
+    name: "Build and Test using Matrix"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Set up a matrix to run the following 4 configurations:
+      # 1. <Linux, Release, latest G++ compiler toolchain on the default runner image, default generator>
+      # 2. <Linux, Release, latest Clang++ compiler toolchain on the default runner image, default generator>
+      # 3. <MacOS, Release, latest G++ compiler toolchain on the default runner image, default generator>
+      # 4. <MacOS, Release, latest Clang++ compiler toolchain on the default runner image, default generator>
+      matrix:
+        os: [ubuntu-22.04, macos-12]
+        cpp_compiler: [g++, clang++]
+        build_type: [Release]
+    steps:
+      - name: Checkout umbrella crypto3 repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.umbrella_repo }}
+          submodules: 'true' # Using true fetches only the top-level submodules
+          fetch-depth: 1 # Fetch only the latest commit on the triggered branch/ref
+
+      - name: Checkout CI/CD repository
+        uses: actions/checkout@v4
+        with:
+          repository: NilFoundation/ci-cd
+          ref: ${{ inputs.ci_cd_ref }}
+          path: .ci_cd
+
+      - name: Checkout submodules to specified commits
+        if: inputs.submodules_json != ''
+        run: .ci_cd/scripts/checkout_submodules.sh '${{ inputs.submodules_json }}'
+
+      - name: Determine submodule path
+        id: get-submodule-path
+        run: |
+          # Parsing .gitmodules to find the path of the submodule repository.
+          submodule_path=$(git config --file .gitmodules --get-regexp path | awk -v repo_name="${{ github.event.repository.name }}" '$0 ~ "submodule\\."repo_name"\\.path" { sub(/.*path /, ""); print }')
+          echo "Submodule path is $submodule_path"
+          echo "submodule-path=$submodule_path" >> $GITHUB_OUTPUT
+
+      - name: Checkout current repository as umbrella submodule lib
+        uses: actions/checkout@v4
+        with:
+          path: ${{ steps.get-submodule-path.outputs.submodule-path }}
+          fetch-depth: 1
+          ref: ${{ github.event.client_payload.ref }}
+
+      - name: Set usefull strings
+        # Turn input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
+        id: strings
+        shell: bash
+        run: |
+          # CMake locations
+          umbrella_build_dir="${{ github.workspace }}/build"
+          submodule_build_dir="$umbrella_build_dir/${{ steps.get-submodule-path.outputs.submodule-path }}"
+          echo "umbrella-build-dir=$umbrella_build_dir" >> "$GITHUB_OUTPUT"
+          echo "submodule-build-dir=$submodule_build_dir" >> "$GITHUB_OUTPUT"
+          echo "submodule-test-dir=$submodule_build_dir/test" >> "$GITHUB_OUTPUT"
+
+          # Dependencies dir location
+          echo "dependencies-dir=${{ github.workspace }}/../dependencies" >> "$GITHUB_OUTPUT"
+
+          # Get platform version
+          os_version=${{ matrix.os }}
+          platform_version=${os_version##*-}
+          echo "platform-version=${platform_version}" >> $GITHUB_OUTPUT
+
+      - name: Set up dependencies directory
+        run: |
+          mkdir -p "${{ steps.strings.outputs.dependencies-dir }}"
+
+      - name: Install boost
+        uses: MarkusJx/install-boost@v2.4.4
+        id: install-boost
+        with:
+          boost_version: ${{ inputs.BOOST_VERSION }}
+          # Extract version number from matrix.os by replacing os_name-
+          # A list of supported versions can be found here:
+          # https://github.com/MarkusJx/prebuilt-boost/blob/main/versions-manifest.json
+          platform_version: ${{ steps.strings.outputs.platform-version }}
+          boost_install_dir: ${{ steps.strings.outputs.dependencies-dir }}
+
+      - name: Configure CMake
+        run: >
+          cmake -B ${{ steps.strings.outputs.umbrella-build-dir }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DBUILD_TESTS=TRUE
+          -DENABLE_JUNIT_TEST_OUTPUT=TRUE
+          -S ${{ github.workspace }}
+
+        env:
+          BOOST_ROOT: "${{ steps.install-boost.outputs.BOOST_ROOT }}"
+
+      - name: Build all inside submodule
+        id: build-submodule
+        working-directory: ${{ steps.strings.outputs.submodule-build-dir }}
+        run: |
+          # Not considering failed targets bad. We will handle them as junit test result
+          build_log_path=${{ steps.strings.outputs.submodule-build-dir }}/build.log
+          make -k -j $(nproc) 2>&1 | tee build.log
+          echo "build-log=$build_log_path" >> "$GITHUB_OUTPUT"
+
+      - name: Set pip cache
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip3 install junit_xml
+
+      - name: Make test report from build result
+        id: make-build-report
+        working-directory: .ci_cd/scripts
+        run: |
+          build_junit_report=${{ steps.strings.outputs.submodule-build-dir }}/build_result.xml
+          python3 build_log_to_junit.py -f ${{ steps.build-submodule.outputs.build-log }} -o $build_junit_report
+          echo "build-junit-report=$build_junit_report" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests inside submodule test dir
+        working-directory: ${{ steps.strings.outputs.submodule-test-dir }}
+        # Not considering failed tests bad. We will compare diff instead
+        run: ctest -v -j $(nproc) || exit 0
+
+      - name: Move test results to dir for uploading
+        id: prepare-for-uploading
+        run: |
+          # upload action takes only absolute path, following command fits both macOS and Linux
+          artifact_dir=${{ github.workspace }}/../results_for_uploading
+          mkdir $artifact_dir
+          artifact_dir=$(cd ${{ github.workspace }}/../results_for_uploading && pwd)
+
+          custom_tests_dir=$artifact_dir/${{ matrix.os }}/${{ matrix.cpp_compiler }}/${{ matrix.build_type }}
+          mkdir -p $custom_tests_dir
+          # TODO:remove
+          find ${{ steps.strings.outputs.submodule-test-dir }} -type f
+          mv ${{ steps.strings.outputs.submodule-test-dir }}/junit_results/* $custom_tests_dir
+          mv ${{ steps.make-build-report.outputs.build-junit-report }} $custom_tests_dir
+          echo "artifact-dir=$artifact_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload tests JUnit results
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.TESTS_ARTIFACT_NAME }}
+          path: ${{ steps.prepare-for-uploading.outputs.artifact-dir }}
