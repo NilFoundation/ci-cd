@@ -1,0 +1,16 @@
+name: 'Checkout Repositories'
+description: 'Check out repositories based on repository names and references'
+
+inputs:
+  repoData:
+    description: 'Multiline string with repository names and references (e.g. `org/repo: ref`)'
+    required: true
+
+  exclude:
+    description: 'Multiline string of path patterns to exclude. Masks supported'
+    required: false
+    default: ''
+
+runs:
+  using: 'node12'
+  main: 'dist/index.js'
