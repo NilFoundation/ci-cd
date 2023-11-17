@@ -5,10 +5,12 @@ import os
 from github import Github
 
 from common import extract_related_prs, get_syncwith_issue, SYNCWITH_TAG
-from utils import RelatedPR, RelatedPRsCommentBody
+from utils import assign_output, RelatedPR, RelatedPRsCommentBody
 
 
 class LinkerToIssue:
+    ISSUE_COMMENT_STATUS_VAR_NAME = "issue-comment-status"
+
     def __init__(self, g, repo_name, pr_number):
         self.g = g
         self.current_repo = g.get_repo(repo_name)
@@ -29,6 +31,7 @@ class LinkerToIssue:
                 comment.body
             ):  # and comment.user.id == self.g.get_app().id:
                 if json.loads(comment_body.hidden_text) == dicts_for_dump:
+                    assign_output(self.ISSUE_COMMENT_STATUS_VAR_NAME, "unchanged")
                     print("The same issue comment already exists, exiting...")
                     return
 
@@ -42,10 +45,11 @@ class LinkerToIssue:
         comment_body.hidden_text = json.dumps(dicts_for_dump)
         if comment is not None:
             print("Editing existing issue comment")
+            assign_output(self.ISSUE_COMMENT_STATUS_VAR_NAME, "edited")
             comment.edit(comment_body.dump())
         else:
             print("Creating new issue comment")
-            raise
+            assign_output(self.ISSUE_COMMENT_STATUS_VAR_NAME, "created")
             self.issue.create_comment(comment_body.dump())
 
     def _comment_pr(self):
@@ -79,7 +83,7 @@ class LinkerToIssue:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract related PRs based on PR title"
+        description="Extract related PRs based on PR title. Assign either `created`, `edited` or `unchanged` status to GH step output."
     )
     parser.add_argument(
         "repo_name", help="Full name of the current repository, e.g., 'org/repo'"

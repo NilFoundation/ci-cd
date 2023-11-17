@@ -1,16 +1,21 @@
-name: 'Checkout Repositories'
-description: 'Check out repositories based on repository names and references'
+name: 'Recursive Checkout'
+description: 'Checkout repositories based on their names and references'
 
 inputs:
-  repoData:
+  refs:
     description: 'Multiline string with repository names and references (e.g. `org/repo: ref`)'
     required: true
 
+  paths:
+    description: 'Multiline string of path patterns to include'
+    required: false
+    default: ''
+
   exclude:
-    description: 'Multiline string of path patterns to exclude. Masks supported'
+    description: 'Multiline string of path patterns to exclude'
     required: false
     default: ''
 
 runs:
-  using: 'node12'
+  using: 'node16'
   main: 'dist/index.js'

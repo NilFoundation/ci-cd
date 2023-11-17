@@ -1,3 +1,4 @@
+import os
 import re
 from dataclasses import dataclass, asdict, is_dataclass
 
@@ -83,3 +84,10 @@ class TagParser:
     def get_tags(string):
         matches = re.findall(TagParser.TAG_PATTERN, string)
         return {tag: value for tag, value in matches}
+
+
+def assign_output(var_name, value):
+    # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
+    env_file = os.getenv("GITHUB_OUTPUT")
+    with open(env_file, "a") as file:
+        file.write(f"{var_name}<<EOF\n{value}\nEOF\n")

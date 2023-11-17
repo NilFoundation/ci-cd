@@ -1,89 +1,80 @@
 const core = require('@actions/core');
 const exec = require('@actions/exec');
+const glob = require('@actions/glob');
 const fs = require('fs');
 const path = require('path');
-const minimatch = require('minimatch');
 const gitUrlParse = require('git-url-parse');
 
-async function run() {
+
+async function getGitRepoName(dir) {
     try {
-        const repoDataLines = core.getInput('repoData').split('\n');
-        const excludePatterns = core.getInput('exclude').split('\n').filter(p => p.trim() !== '');
+        const repoUrl = await exec.getExecOutput('git', ['config', '--get', 'remote.origin.url'], {
+            cwd: dir
+        });
+        if (repoUrl.stdout) {
+            const parsedUrl = gitUrlParse(repoUrl.stdout.trim());
+            return `${parsedUrl.owner}/${parsedUrl.name}`;
+        }
+    } catch (error) {
+        core.warning(`Failed to get Git repo name for ${dir}: ${error}`);
+    }
+    return null;
+}
+
+async function checkoutRepo(dir, ref) {
+    try {
+        // Check if ref exists locally
+        const refExists = await exec.getExecOutput('git', ['cat-file', '-t', ref], {
+            cwd: dir,
+            ignoreReturnCode: true
+        });
+        if (refExists.exitCode !== 0) {
+            // Fetch the specific ref
+            await exec.exec('git', ['fetch', '--depth=1', 'origin', ref], {
+                cwd: dir
+            });
+        }
+        // Checkout the ref
+        await exec.exec('git', ['-C', dir, 'checkout', ref]);
+    } catch (error) {
+        core.error(`Failed to checkout ${ref} in ${dir}: ${error}`);
+    }
+}
+
+async function main() {
+    try {
+        const repoDataLines = core.getMultilineInput('refs');
+        const excludePatterns = core.getMultilineInput('exclude');
+        const pathsToCheckout = core.getMultilineInput('paths');
 
         let repos = {};
         for (const line of repoDataLines) {
             if (line.trim() === '') continue;
-            const [repoFullName, sha] = line.split(':').map(part => part.trim());
-            repos[repoFullName] = sha;
+            const [repoFullName, ref] = line.split(':').map(part => part.trim());
+            repos[repoFullName] = ref;
         }
 
-        function shouldExclude(filePath) {
-            return excludePatterns.some(pattern => minimatch(filePath, pattern));
-        }
+        const excludeGlobber = await glob.create(excludePatterns.join('\n'), { implicitDescendants: false });
+        console.log(pathsToCheckout)
+        const checkoutGlobber = await glob.create(pathsToCheckout.join('\n'));
 
-        async function getGitRepoName(dir) {
-            try {
-                const repoUrl = await exec.getExecOutput('git', ['config', '--get', 'remote.origin.url'], {
-                    cwd: dir
-                });
-                if (repoUrl.stdout) {
-                    const parsedUrl = gitUrlParse(repoUrl.stdout.trim());
-                    return `${parsedUrl.owner}/${parsedUrl.name}`;
-                }
-            } catch (error) {
-                core.warning(`Failed to get Git repo name for ${dir}: ${error}`);
-            }
-            return null;
-        }
+        const excludedPaths = await excludeGlobber.glob();
+        const pathsToProcess = await checkoutGlobber.glob();
 
-        async function checkoutRepo(dir, sha) {
-            try {
-                // Check if SHA exists locally
-                const shaExists = await exec.getExecOutput('git', ['cat-file', '-t', sha], {
-                    cwd: dir,
-                    ignoreReturnCode: true
-                });
-                if (shaExists.exitCode !== 0) {
-                    // Fetch the specific SHA
-                    await exec.exec('git', ['fetch', '--depth=1', 'origin', sha], {
-                        cwd: dir
-                    });
-                }
-                // Checkout the SHA
-                await exec.exec('git', ['-C', dir, 'checkout', sha]);
-            } catch (error) {
-                core.error(`Failed to checkout ${sha} in ${dir}: ${error}`);
-            }
-        }
+        const filteredPathsToProcess = pathsToProcess.filter(p => !excludedPaths.includes(p));
 
-        async function processDirectory(dir) {
-            const entries = fs.readdirSync(dir, {
-                withFileTypes: true
-            });
-
-            for (const entry of entries) {
-                const fullPath = path.join(dir, entry.name);
-
-                if (entry.isDirectory()) {
-                    if (!shouldExclude(fullPath)) {
-                        if (entry.name === '.git') {
-                            const repoName = await getGitRepoName(dir);
-                            if (repoName && repos[repoName]) {
-                                const sha = repos[repoName];
-                                await checkoutRepo(dir, sha);
-                            }
-                        } else {
-                            await processDirectory(fullPath);
-                        }
-                    }
+        for (const dir of filteredPathsToProcess) {
+            if (fs.existsSync(path.join(dir, '.git'))) {
+                const repoName = await getGitRepoName(dir);
+                if (repoName && repos[repoName]) {
+                    const ref = repos[repoName];
+                    await checkoutRepo(dir, ref);
                 }
             }
         }
-
-        await processDirectory('.'); // Start processing from the current working directory
     } catch (error) {
         core.setFailed(`Action failed with error: ${error}`);
     }
 }
 
-run();
+main();
