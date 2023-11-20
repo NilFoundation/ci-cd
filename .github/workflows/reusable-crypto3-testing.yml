@@ -47,7 +47,7 @@ jobs:
       - name: Checkout Crypto3 repository
         uses: actions/checkout@v4
         with:
-          repository: NilFoundation/crypto3-clone # FIXME: change back to crypto3
+          repository: NilFoundation/crypto3
           submodules: 'true' # Using true fetches only the top-level submodules
           fetch-depth: 1 # Fetch only the latest commit on the triggered branch/ref
 

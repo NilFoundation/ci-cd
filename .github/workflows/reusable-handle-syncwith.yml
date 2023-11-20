@@ -1,4 +1,4 @@
-name: Pull Request Untrusted Workflow
+name: SyncWith Handler (Reusable)
 
 on:
   workflow_call:

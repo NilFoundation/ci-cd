@@ -16,7 +16,9 @@ class CommentBodyManager:
             return False
 
         pattern = r"<!-- (.*?)\n(.*?)\n-->\n(.*)"
-        match = re.search(pattern, comment_content.replace('\r\n', '\n'), re.DOTALL)  # replace() is needed after manual comment edit
+        match = re.search(
+            pattern, comment_content.replace("\r\n", "\n"), re.DOTALL
+        )  # replace() is needed after manual comment edit
         if match is None:
             return False
         tag, hidden_text, visible_text = match.groups()

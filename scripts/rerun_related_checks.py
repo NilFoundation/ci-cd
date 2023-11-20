@@ -8,8 +8,17 @@ from common import extract_related_prs, get_syncwith_issue
 
 
 def is_final_status(status):
-    final_statuses = ["completed", "action_required", "cancelled", "failure",
-                      "neutral", "skipped", "stale", "success", "timed_out"]
+    final_statuses = [
+        "completed",
+        "action_required",
+        "cancelled",
+        "failure",
+        "neutral",
+        "skipped",
+        "stale",
+        "success",
+        "timed_out",
+    ]
     return status in final_statuses
 
 
@@ -25,7 +34,9 @@ def wait_for_workflow_completion(workflow_run, timeout_seconds=300) -> bool:
 
     if elapsed_time >= timeout_seconds:
         print(f"Timeout waiting for workflow {workflow_run.id} to complete.")
-        raise TimeoutError(f"Cancelation timeout after {elapsed_time} seconds of waiting")
+        raise TimeoutError(
+            f"Cancelation timeout after {elapsed_time} seconds of waiting"
+        )
 
     return True
 
@@ -35,7 +46,9 @@ def rerun_workflow_actions(github_client, repo_full_name, head_sha):
     runs = repo.get_workflow_runs(head_sha=head_sha, event="pull_request")
 
     for run in runs:
-        if run.repository.full_name == os.environ.get("GITHUB_REPOSITORY") and int(run.id) == int(os.environ.get("GITHUB_RUN_ID")):
+        if run.repository.full_name == os.environ.get("GITHUB_REPOSITORY") and int(
+            run.id
+        ) == int(os.environ.get("GITHUB_RUN_ID")):
             # Do not commit suicide
             continue
 
@@ -58,7 +71,9 @@ def main():
 
     token = os.environ.get("CI_TOKEN")
     if not token:
-        raise ValueError("GitHub personal access token not provided in the environment variable 'CI_TOKEN'.")
+        raise ValueError(
+            "GitHub personal access token not provided in the environment variable 'CI_TOKEN'."
+        )
 
     g = Github(token)
 

@@ -32,7 +32,10 @@ def main():
         head = linked_pr.head
         output_data[head.repo.full_name] = head.sha
 
-    assign_output("prs-shas", "\n".join([f"{full_name}: {sha}" for full_name, sha in output_data.items()]))
+    assign_output(
+        "prs-shas",
+        "\n".join([f"{full_name}: {sha}" for full_name, sha in output_data.items()]),
+    )
 
 
 if __name__ == "__main__":

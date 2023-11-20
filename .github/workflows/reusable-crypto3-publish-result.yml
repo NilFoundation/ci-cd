@@ -1,6 +1,6 @@
 # Reasons of not including this into testing workflow is https://github.com/EnricoMi/publish-unit-test-result-action#support-fork-repositories-and-dependabot-branches
 
-name: Publish Test Results (Reusable)
+name: Publish Crypto3 Test Results (Reusable)
 
 on:
   workflow_call:
