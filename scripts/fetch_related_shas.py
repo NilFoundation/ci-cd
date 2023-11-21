@@ -1,5 +1,4 @@
 import argparse
-import os
 
 from github import Github
 
@@ -13,13 +12,7 @@ def main():
     parser.add_argument("pr_number", type=int, help="Pull request number")
     args = parser.parse_args()
 
-    token = os.environ.get("CI_TOKEN")
-    if not token:
-        raise ValueError(
-            "GitHub personal access token not provided in the environment variable 'CI_TOKEN'."
-        )
-
-    g = Github(token)
+    g = Github()
 
     repo = g.get_repo(args.repo_name)
     pr = repo.get_pull(args.pr_number)
