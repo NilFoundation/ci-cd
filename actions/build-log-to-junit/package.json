@@ -1,0 +1,19 @@
+{
+  "name": "build-log-to-junit",
+  "version": "1.0.0",
+  "description": "Github Action to creta JUNIT test result from make build logs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ncc build index.js -o dist"
+  },
+  "author": "x-mass",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.10.1",
+    "junit-report-builder": "^3.1.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.1"
+  }
+}

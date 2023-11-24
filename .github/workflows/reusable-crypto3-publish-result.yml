@@ -1,0 +1,52 @@
+# Reasons of not including this into testing workflow is https://github.com/EnricoMi/publish-unit-test-result-action#support-fork-repositories-and-dependabot-branches
+
+name: Publish Crypto3 Test Results (Reusable)
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  TESTS_ARTIFACT_NAME: 'test-results'
+  EVENT_FILE_ARTIFACT_NAME: 'event-file'
+
+jobs:
+  publish-test-results:
+    name: "Publish Tests Results"
+    # if: github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write # needed unless run with comment_mode: off
+      actions: read # required by download step to access artifacts API
+      statuses: write # required to set commit status
+      # contents: read # only needed for private repository
+      # issues: read # only needed for private repository
+    steps:
+      - name: Download and Extract Test Result Artifacts
+        uses: dawidd6/action-download-artifact@268677152d06ba59fcec7a7f0b5d961b6ccd7e1e
+        with:
+          name: ${{ env.TESTS_ARTIFACT_NAME }}
+          path: ${{ env.TESTS_ARTIFACT_NAME }}  # Otherwise it extracts to current dir
+          run_id: ${{ github.event.workflow_run.id }}
+          if_no_artifact_found: ignore
+
+      - name: Download and Extract PR Event File
+        uses: dawidd6/action-download-artifact@268677152d06ba59fcec7a7f0b5d961b6ccd7e1e
+        with:
+          name: ${{ env.EVENT_FILE_ARTIFACT_NAME }}
+          run_id: ${{ github.event.workflow_run.id }}
+
+      - name: Publish Test Results
+        # TODO: check if this compare_to_earlier_commit work after target repo merge to master
+        uses: EnricoMi/publish-unit-test-result-action@ca89ad036b5fcd524c1017287fb01b5139908408
+        with:
+          files: "${{ env.TESTS_ARTIFACT_NAME }}/**/*.xml"
+          report_individual_runs: true
+          event_file: event.json
+          event_name: pull_request
+          # This could be used for files annotation, but Boost JUNIT output is insufficient for it (no file, line properties).
+          # They exist in native Boost test result format. Mb try to update testing framework, and this will work
+          # test_file_prefix: "+test/"
+          # check_run_annotations_branch: "*"

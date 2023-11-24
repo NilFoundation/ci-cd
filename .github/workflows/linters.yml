@@ -1,0 +1,28 @@
+name: Lint Code Base
+on: pull_request
+jobs:
+  lint:
+    name: Lint Code Base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install Python linters
+        run: |
+          pip install black yamllint
+      - name: Check with black
+        run: |
+          black --check .
+      - name: Run yamllint
+        run: |
+          yamllint .
+      - name: Install ShellCheck (Bash linter)
+        run: |
+          sudo apt-get install shellcheck
+      - name: Run shellcheck
+        run: |
+          find . -type f -name '*.sh' -exec shellcheck {} +

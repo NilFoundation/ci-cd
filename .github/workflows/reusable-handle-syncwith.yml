@@ -1,0 +1,98 @@
+name: SyncWith Handler (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      ci-cd-ref:
+        required: false
+        type: string
+    outputs:
+      prs-shas:
+        description: "Multiline `org/repo: ref` values. Suitable for recursive checkout."
+        value: ${{ jobs.handle-syncwhith.outputs.prs-shas }}
+
+jobs:
+  handle-syncwhith:
+    name: "Handle SyncWith tag: link to issue, fetch SHAs, trigger related PRs"
+    # This job runs only if the PR is not from a fork to prevent linking
+    if: github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    outputs:
+      prs-shas: ${{ steps.fetch-shas.outputs.prs-shas }}
+    steps:
+      - name: Check if PR title contains SyncWith tag
+        id: fetch-needed
+        run: |
+          count=$(echo "${{ github.event.pull_request.title }}" | grep -o '\[SyncWith' | wc -l)
+          if [[ "$count" -eq 1 ]]; then
+            value=true
+          elif [[ "$count" -gt 1 ]]; then
+            echo "Error: Multiple 'SyncWith' tags detected in PR title." >&2
+            exit 1
+          else
+            value=false
+          fi
+          echo "value=$value" >> $GITHUB_OUTPUT
+
+      - name: Checkout CI/CD repository
+        if: steps.fetch-needed.outputs.value == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: NilFoundation/ci-cd
+          ref: ${{ inputs.ci-cd-ref }}
+          path: .ci_cd
+
+      - name: Set pip cache
+        if: steps.fetch-needed.outputs.value == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        if: steps.fetch-needed.outputs.value == 'true'
+        run: |
+          pip3 install PyGithub
+
+      - name: Generate CI/CD bot token
+        id: generate-ci-token
+        if: steps.fetch-needed.outputs.value == 'true'
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CICD_APP_ID }}
+          private-key: ${{ secrets.CICD_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Link PR to SyncWith issue
+        id: link-pr
+        if: steps.fetch-needed.outputs.value == 'true'
+        working-directory: .ci_cd/scripts
+        run: |
+          # Sets `issue-comment-status` output to either `created`, `edited` or `unchanged`
+          python3 link_to_issue.py \
+            ${{ github.repository }} \
+            ${{ github.event.pull_request.number }}
+        env:
+          CI_TOKEN: ${{ steps.generate-ci-token.outputs.token }}
+
+      - name: Re-run related PRs checks
+        if: steps.fetch-needed.outputs.value == 'true' &&  steps.link-pr.outputs.issue-comment-status == 'edited'
+        working-directory: .ci_cd/scripts
+        run: |
+          python3 rerun_related_checks.py \
+            ${{ github.repository }} \
+            ${{ github.event.pull_request.number }}
+        env:
+          CI_TOKEN: ${{ steps.generate-ci-token.outputs.token }}
+
+      - name: Fetch related PRs' SHAs
+        id: fetch-shas
+        working-directory: .ci_cd/scripts
+        run: |
+          # The script sets `prs-shas` output to `org/repo: sha` formated lines.
+          # Could be used as is in recursive-checkout action
+          python3 fetch_related_shas.py \
+            ${{ github.repository }} \
+            ${{ github.event.pull_request.number }}
+        env:
+          CI_TOKEN: ${{ steps.generate-ci-token.outputs.token }}

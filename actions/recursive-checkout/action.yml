@@ -1,0 +1,21 @@
+name: 'Recursive Checkout'
+description: 'Checkout repositories based on their names and references'
+
+inputs:
+  refs:
+    description: 'Multiline string with repository names and references (e.g. `org/repo: ref`)'
+    required: true
+
+  paths:
+    description: 'Multiline string of path patterns to include'
+    required: false
+    default: ''
+
+  exclude:
+    description: 'Multiline string of path patterns to exclude'
+    required: false
+    default: ''
+
+runs:
+  using: 'node16'
+  main: 'dist/index.js'

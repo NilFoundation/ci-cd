@@ -1,0 +1,15 @@
+name: 'Generate JUnit Report'
+description: 'Generate JUnit report from make build output'
+
+inputs:
+  build-log:
+    description: 'Path to the file containing the build output'
+    required: true
+
+outputs:
+  build-junit-report:
+    description: 'Path to the generated JUnit report'
+
+runs:
+  using: 'node16'
+  main: 'dist/index.js'
