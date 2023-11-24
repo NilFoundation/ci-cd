@@ -37,9 +37,7 @@ class LinkerToIssue:
 
         comment_visible_part = "PRs, synced with the current issue:\n"
         for pr in dataclass_prs:
-            comment_visible_part += (
-                f"- [{pr.repo}#{pr.number}]({pr.url}) (SHA: {pr.sha[:7]})\n"
-            )
+            comment_visible_part += f"- [{pr.repo}#{pr.number}]({pr.url}) (SHA: [{pr.sha[:7]}](https://github.com/{pr.repo}/commit/{pr.sha}))\n"
 
         comment_body.visible_text = comment_visible_part
         comment_body.hidden_text = json.dumps(dicts_for_dump)

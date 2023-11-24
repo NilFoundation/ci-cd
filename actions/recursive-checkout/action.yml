@@ -7,14 +7,13 @@ inputs:
     required: true
 
   paths:
-    description: 'Multiline string of path patterns to include'
-    required: false
-    default: ''
+    description: 'Multiline string of path patterns to include. Base dir is `working-directory` of the action'
+    required: true
 
-  exclude:
-    description: 'Multiline string of path patterns to exclude'
+  fetch-depth:
+    description: 'Depth for the git fetch. Set to 0 to get full history'
     required: false
-    default: ''
+    default: '1'
 
 runs:
   using: 'node16'
