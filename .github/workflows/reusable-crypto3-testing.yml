@@ -53,7 +53,7 @@ jobs:
 
       - name: Checkout submodules to specified refs
         if: inputs.submodules-refs != ''
-        uses: NilFoundation/ci-cd/actions/recursive-checkout@consistent-testing
+        uses: NilFoundation/ci-cd/actions/recursive-checkout@0588663776c5989c2ba23064811e7f71a20ada83
         with:
           paths: ${{ github.workspace }}/**
           refs: ${{ inputs.submodules-refs }}
@@ -130,7 +130,7 @@ jobs:
 
       - name: Generate JUnit Report from build result
         id: make-build-report
-        uses: NilFoundation/ci-cd/actions/build-log-to-junit@consistent-testing
+        uses: NilFoundation/ci-cd/actions/build-log-to-junit@0588663776c5989c2ba23064811e7f71a20ada83
         with:
           build-log: ${{ steps.build-submodule.outputs.build-log }}
 
