@@ -23,10 +23,10 @@ def main():
     linked_prs, _ = extract_related_prs(g, issue)
     for linked_pr in linked_prs:
         head = linked_pr.head
-        output_data[head.repo.full_name] = head.sha
+        output_data[head.repo.full_name] = f"refs/pull/{linked_pr.number}/merge"
 
     assign_output(
-        "prs-shas",
+        "prs-refs",
         "\n".join([f"{full_name}: {sha}" for full_name, sha in output_data.items()]),
     )
 

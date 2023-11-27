@@ -4,12 +4,18 @@ on:
   workflow_call:
     inputs:
       ci-cd-ref:
-        required: false
+        description: 'Reference (SHA, branch, etc.) to ci-cd repo to use scripts from'
         type: string
+        required: false
+      fetch-only:
+        description: 'Either add comments and re-run related PRs or just fetch SHAs. Set to `true` if you only need to produce an input to recursive-checkout'
+        type: boolean
+        required: false
+        default: false
     outputs:
-      prs-shas:
+      prs-refs:
         description: "Multiline `org/repo: ref` values. Suitable for recursive checkout."
-        value: ${{ jobs.handle-syncwhith.outputs.prs-shas }}
+        value: ${{ jobs.handle-syncwhith.outputs.prs-refs }}
 
 jobs:
   handle-syncwhith:
@@ -18,7 +24,7 @@ jobs:
     if: github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     outputs:
-      prs-shas: ${{ steps.fetch-shas.outputs.prs-shas }}
+      prs-refs: ${{ steps.fetch-refs.outputs.prs-refs }}
     steps:
       - name: Check if PR title contains SyncWith tag
         id: fetch-needed
@@ -65,7 +71,7 @@ jobs:
 
       - name: Link PR to SyncWith issue
         id: link-pr
-        if: steps.fetch-needed.outputs.value == 'true'
+        if: steps.fetch-needed.outputs.value == 'true' && inputs.fetch-only == false
         working-directory: .ci_cd/scripts
         run: |
           # Sets `issue-comment-status` output to either `created`, `edited` or `unchanged`
@@ -76,7 +82,7 @@ jobs:
           CI_TOKEN: ${{ steps.generate-ci-token.outputs.token }}
 
       - name: Re-run related PRs checks
-        if: steps.fetch-needed.outputs.value == 'true' &&  steps.link-pr.outputs.issue-comment-status == 'edited'
+        if: steps.fetch-needed.outputs.value == 'true' && steps.link-pr.outputs.issue-comment-status == 'edited' && inputs.fetch-only == false
         working-directory: .ci_cd/scripts
         run: |
           python3 rerun_related_checks.py \
@@ -85,13 +91,14 @@ jobs:
         env:
           CI_TOKEN: ${{ steps.generate-ci-token.outputs.token }}
 
-      - name: Fetch related PRs' SHAs
-        id: fetch-shas
+      - name: Fetch related PRs' refs
+        id: fetch-refs
+        if: steps.fetch-needed.outputs.value == 'true'
         working-directory: .ci_cd/scripts
         run: |
-          # The script sets `prs-shas` output to `org/repo: sha` formated lines.
+          # The script sets `prs-refs` output to `org/repo: ref` formated lines.
           # Could be used as is in recursive-checkout action
-          python3 fetch_related_shas.py \
+          python3 fetch_syncwith_refs.py \
             ${{ github.repository }} \
             ${{ github.event.pull_request.number }}
         env:

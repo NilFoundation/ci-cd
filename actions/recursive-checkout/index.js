@@ -21,31 +21,39 @@ async function getGitRepoName(dir) {
     return null;
 }
 
-async function checkoutRepo(dir, ref) {
+async function checkoutRepo(dir, ref, depth = 1) {
     try {
-        // Check if ref exists locally
-        const refExists = await exec.getExecOutput('git', ['cat-file', '-t', ref], {
-            cwd: dir,
-            ignoreReturnCode: true
-        });
-        if (refExists.exitCode !== 0) {
-            // Fetch the specific ref
-            await exec.exec('git', ['fetch', '--depth=1', 'origin', ref], {
-                cwd: dir
-            });
+        // Create a temporary branch name based on the ref
+        const tempBranch = `temp-${Date.now()}`;
+
+        core.info(`Checkouting ${dir} ${ref} to local ${tempBranch}`);
+
+        // Fetch the specific ref into the temporary branch. This way we could handle
+        // SHAs, branches and refs (`refs/pull/%d/merge`) in the same way
+        const fetchArgs = ['fetch', 'origin', `${ref}:${tempBranch}`];
+
+        if (depth > 0) {
+            fetchArgs.push(`--depth=${depth}`);
         }
-        // Checkout the ref
-        await exec.exec('git', ['-C', dir, 'checkout', ref]);
+
+        // Fetch the specific ref into the temporary branch
+        await exec.exec('git', fetchArgs, {
+            cwd: dir
+        });
+
+        // Checkout the temporary branch
+        await exec.exec('git', ['-C', dir, 'checkout', tempBranch]);
     } catch (error) {
         core.error(`Failed to checkout ${ref} in ${dir}: ${error}`);
+        throw error;
     }
 }
 
 async function main() {
     try {
         const repoDataLines = core.getMultilineInput('refs');
-        const excludePatterns = core.getMultilineInput('exclude');
         const pathsToCheckout = core.getMultilineInput('paths');
+        const depth = parseInt(core.getInput('fetch-depth'), 10);
 
         let repos = {};
         for (const line of repoDataLines) {
@@ -54,21 +62,20 @@ async function main() {
             repos[repoFullName] = ref;
         }
 
-        const excludeGlobber = await glob.create(excludePatterns.join('\n'), { implicitDescendants: false });
-        console.log(pathsToCheckout)
-        const checkoutGlobber = await glob.create(pathsToCheckout.join('\n'));
+        // `implicitDescendants` prevents `a` from traversing `a/**`, so you have more control
+        const checkoutGlobber = await glob.create(pathsToCheckout.join('\n'), { implicitDescendants: false });
 
-        const excludedPaths = await excludeGlobber.glob();
         const pathsToProcess = await checkoutGlobber.glob();
 
-        const filteredPathsToProcess = pathsToProcess.filter(p => !excludedPaths.includes(p));
-
-        for (const dir of filteredPathsToProcess) {
-            if (fs.existsSync(path.join(dir, '.git'))) {
-                const repoName = await getGitRepoName(dir);
-                if (repoName && repos[repoName]) {
-                    const ref = repos[repoName];
-                    await checkoutRepo(dir, ref);
+        for (const dir of pathsToProcess) {
+            if (fs.statSync(dir).isDirectory()) {
+                core.info(`Searching for .git in ${dir}`);
+                if (fs.existsSync(path.join(dir, '.git'))) {
+                    const repoName = await getGitRepoName(dir);
+                    if (repoName && repos[repoName]) {
+                        const ref = repos[repoName];
+                        await checkoutRepo(dir, ref, depth);
+                    }
                 }
             }
         }

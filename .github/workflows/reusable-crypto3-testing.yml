@@ -55,7 +55,7 @@ jobs:
         if: inputs.submodules-refs != ''
         uses: NilFoundation/ci-cd/actions/recursive-checkout@consistent-testing
         with:
-          paths: ${{ github.workspace }}
+          paths: ${{ github.workspace }}/**
           refs: ${{ inputs.submodules-refs }}
 
       - name: Determine submodule path

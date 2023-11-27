@@ -46,12 +46,6 @@ def rerun_workflow_actions(github_client, repo_full_name, head_sha):
     runs = repo.get_workflow_runs(head_sha=head_sha, event="pull_request")
 
     for run in runs:
-        if run.repository.full_name == os.environ.get("GITHUB_REPOSITORY") and int(
-            run.id
-        ) == int(os.environ.get("GITHUB_RUN_ID")):
-            # Do not commit suicide
-            continue
-
         was_rerun = False
         if not is_final_status(run.status):
             print(f"Cancelling run {run.id} for {repo_full_name}")
@@ -85,6 +79,9 @@ def main():
     linked_prs, _ = extract_related_prs(g, issue)
     for linked_pr in linked_prs:
         head = linked_pr.head
+        if head.repo.full_name == os.environ.get("GITHUB_REPOSITORY"):
+            # Do not commit suicide
+            continue
         rerun_workflow_actions(g, head.repo.full_name, head.sha)
 
 
