@@ -3,9 +3,18 @@ name: Crypto3 Build and Test on Multiple Platforms (Reusable)
 on:
   workflow_call:
     inputs:
+      concurrency:
+        type: number
+        description: "Concurrency level (0 to use number of virtual cores)"
+        required: true
+        default: 0
       submodules-refs:
         type: string
         description: "Lines with submodules' repo names and refs (e.g. `org/repo: ref`)"
+        required: false
+      targets:
+        type: string
+        description: "Make and CTest targets. If not specified, everything is tested"
         required: false
       boost-version:
         type: string
@@ -53,7 +62,7 @@ jobs:
 
       - name: Checkout submodules to specified refs
         if: inputs.submodules-refs != ''
-        uses: NilFoundation/ci-cd/actions/recursive-checkout@0588663776c5989c2ba23064811e7f71a20ada83
+        uses: NilFoundation/ci-cd/actions/recursive-checkout@v1
         with:
           paths: ${{ github.workspace }}/**
           refs: ${{ inputs.submodules-refs }}
@@ -92,6 +101,20 @@ jobs:
           platform_version=${os_version##*-}
           echo "platform-version=${platform_version}" >> $GITHUB_OUTPUT
 
+          if [ "${{ inputs.concurrency }}" = "0" ]; then
+            echo "Setting concurrency to number of logical cores"
+            if [[ ${{ runner.os }} == 'Linux' ]]; then
+              proc_number=$(nproc)
+            elif [[ ${{ runner.os }} == 'macOS' ]]; then
+              proc_number=$(sysctl -n hw.logicalcpu)
+            fi
+          else
+            echo "Setting concurrency to user-defined value"
+            proc_number=${{ inputs.concurrency }}
+          fi
+
+          echo "proc-number=${proc_number}" >> $GITHUB_OUTPUT
+
       - name: Set up dependencies directory
         run: |
           mkdir -p "${{ steps.strings.outputs.dependencies-dir }}"
@@ -119,25 +142,28 @@ jobs:
         env:
           BOOST_ROOT: "${{ steps.install-boost.outputs.BOOST_ROOT }}"
 
-      - name: Build all inside submodule
+      - name: Build tests inside submodule
         id: build-submodule
-        working-directory: ${{ steps.strings.outputs.submodule-build-dir }}
+        working-directory: ${{ steps.strings.outputs.submodule-test-dir }}
         run: |
           # Not considering failed targets bad. We will handle them as junit test result
           build_log_path=${{ steps.strings.outputs.submodule-build-dir }}/build.log
-          make -k -j $(nproc) 2>&1 | tee build.log
+          targets_str=$(echo "${{ inputs.targets }}" | awk '{$1=$1};1' | sed '/^$/d' | tr '\n' ' ' | sed 's/ $//')
+          make -k -j ${{ steps.strings.outputs.proc-number }} ${targets_str} 2>&1 | tee ${build_log_path}
           echo "build-log=$build_log_path" >> "$GITHUB_OUTPUT"
 
       - name: Generate JUnit Report from build result
         id: make-build-report
-        uses: NilFoundation/ci-cd/actions/build-log-to-junit@0588663776c5989c2ba23064811e7f71a20ada83
+        uses: NilFoundation/ci-cd/actions/build-log-to-junit@v1
         with:
           build-log: ${{ steps.build-submodule.outputs.build-log }}
 
       - name: Run tests inside submodule test dir
         working-directory: ${{ steps.strings.outputs.submodule-test-dir }}
         # Not considering failed tests bad. We will compare diff instead
-        run: ctest -v -j $(nproc) || exit 0
+        run: |
+          targets_str=$(echo "${{ inputs.targets }}" | awk '{$1=$1};1' | sed '/^$/d' | tr '\n' '|' | sed 's/|$//')
+          ctest -v -j ${{ steps.strings.outputs.proc-number }} -R "(${targets_str})" || exit 0
 
       - name: Move test results to dir for uploading
         id: prepare-for-uploading
@@ -149,8 +175,6 @@ jobs:
 
           custom_tests_dir=$artifact_dir/${{ matrix.os }}/${{ matrix.cpp_compiler }}/${{ matrix.build_type }}
           mkdir -p $custom_tests_dir
-          # TODO:remove
-          find ${{ steps.strings.outputs.submodule-test-dir }} -type f
           mv ${{ steps.strings.outputs.submodule-test-dir }}/junit_results/* $custom_tests_dir
           mv ${{ steps.make-build-report.outputs.build-junit-report }} $custom_tests_dir
           echo "artifact-dir=$artifact_dir" >> "$GITHUB_OUTPUT"
