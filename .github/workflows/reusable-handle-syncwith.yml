@@ -29,7 +29,10 @@ jobs:
       - name: Check if PR title contains SyncWith tag
         id: fetch-needed
         run: |
-          count=$(echo "${{ github.event.pull_request.title }}" | grep -o '\[SyncWith' | wc -l)
+          # Assign to var for escaping
+          pr_title=${{ toJSON(github.event.pull_request.title) }}
+          # Use echo and grep to extract the SyncWith tag
+          count=$(echo "${pr_title}" | grep -o '\[SyncWith' | wc -l)
           if [[ "$count" -eq 1 ]]; then
             value=true
           elif [[ "$count" -gt 1 ]]; then
