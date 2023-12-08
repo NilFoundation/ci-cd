@@ -68,6 +68,11 @@ async function main() {
         const pathsToProcess = await checkoutGlobber.glob();
 
         for (const dir of pathsToProcess) {
+            if (!fs.existsSync(dir)) {
+                core.info(`Path ${dir} does not exist now. Skipping...`);
+                continue;
+            }
+
             if (fs.statSync(dir).isDirectory()) {
                 core.info(`Searching for .git in ${dir}`);
                 if (fs.existsSync(path.join(dir, '.git'))) {

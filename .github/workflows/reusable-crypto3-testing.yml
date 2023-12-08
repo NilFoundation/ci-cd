@@ -62,7 +62,7 @@ jobs:
 
       - name: Checkout submodules to specified refs
         if: inputs.submodules-refs != ''
-        uses: NilFoundation/ci-cd/actions/recursive-checkout@v1
+        uses: NilFoundation/ci-cd/actions/recursive-checkout@v1.1.1
         with:
           paths: ${{ github.workspace }}/**
           refs: ${{ inputs.submodules-refs }}
