@@ -6,7 +6,7 @@ on:
       concurrency:
         type: number
         description: "Concurrency level (0 to use number of virtual cores)"
-        required: true
+        required: false
         default: 0
       submodules-refs:
         type: string
