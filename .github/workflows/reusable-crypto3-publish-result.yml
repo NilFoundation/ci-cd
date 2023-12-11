@@ -4,11 +4,17 @@ name: Publish Crypto3 Test Results (Reusable)
 
 on:
   workflow_call:
+  inputs:
+    artifact-name:
+      type: string
+      description: "Name of the artifact to be published."
+      required: false
+      default: 'test-results'
 
 permissions: {}
 
 env:
-  TESTS_ARTIFACT_NAME: 'test-results'
+  TESTS_ARTIFACT_NAME: ${{ inputs.artifact-name }}
   EVENT_FILE_ARTIFACT_NAME: 'event-file'
 
 jobs:
