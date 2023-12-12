@@ -227,7 +227,7 @@ jobs:
           mkdir -p $artifact_dir
           artifact_dir=$(cd ${{ steps.strings.outputs.docker-workspace-path }}/../results_for_uploading_${{github.sha}} && pwd)
 
-          custom_tests_dir=$artifact_dir/${{ inputs.os_version }}/${{ matrix.cpp_compiler }}/${{ matrix.build_type }}
+          custom_tests_dir=$artifact_dir/ubuntu-22.04/${{ matrix.cpp_compiler }}/${{ matrix.build_type }}
           mkdir -p $custom_tests_dir
           mv ${{ steps.strings.outputs.submodule-test-dir }}/junit_results/* $custom_tests_dir
           mv ${{ steps.make-build-report.outputs.build-junit-report }} $custom_tests_dir
