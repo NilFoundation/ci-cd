@@ -22,7 +22,7 @@ on:
         required: false
         default: '1.81.0' # The least version supported by both matrix.os
 env:
-  TESTS_ARTIFACT_NAME: 'test-results-mac'
+  TESTS_ARTIFACT_NAME: 'test-results'
   EVENT_FILE_ARTIFACT_NAME: 'event-file'
 
 jobs:
