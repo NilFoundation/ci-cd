@@ -184,7 +184,7 @@ jobs:
           mkdir -p $artifact_dir
           artifact_dir=$(cd ${{ github.workspace }}/../results_for_uploading_${{github.sha}} && pwd)
 
-          custom_tests_dir=$artifact_dir/${{ matrix.os }}/${{ matrix.cpp_compiler }}/${{ matrix.build_type }}
+          custom_tests_dir=$artifact_dir/macos-12/${{ matrix.cpp_compiler }}/${{ matrix.build_type }}
           mkdir -p $custom_tests_dir
           mv ${{ steps.strings.outputs.submodule-test-dir }}/junit_results/* $custom_tests_dir
           mv ${{ steps.make-build-report.outputs.build-junit-report }} $custom_tests_dir
