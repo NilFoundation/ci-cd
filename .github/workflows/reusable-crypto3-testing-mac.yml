@@ -39,7 +39,7 @@ jobs:
 
   build-and-test:
     name: "Build and Test using Matrix"
-    runs-on: [macos-11]
+    runs-on: [macos-12]
     strategy:
       # Set up a matrix to run the following 2 configurations:
       # 1. <MacOS, Release, latest G++ compiler toolchain on the default runner image, default generator>
