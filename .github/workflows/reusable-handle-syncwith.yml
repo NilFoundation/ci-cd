@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       ci-cd-ref:
-        description: 'Reference (SHA, branch, etc.) to ci-cd repo to use scripts from'
+        description: "Reference (SHA, branch, etc.) to ci-cd repo to use scripts from"
         type: string
         required: false
       fetch-only:
-        description: 'Either add comments and re-run related PRs or just fetch SHAs. Set to `true` if you only need to produce an input to recursive-checkout'
+        description: "Either add comments and re-run related PRs or just fetch SHAs. Set to `true` if you only need to produce an input to recursive-checkout"
         type: boolean
         required: false
         default: false
@@ -55,8 +55,8 @@ jobs:
         if: steps.fetch-needed.outputs.value == 'true'
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: "3.10"
+          cache: "pip"
 
       - name: Install dependencies
         if: steps.fetch-needed.outputs.value == 'true'
