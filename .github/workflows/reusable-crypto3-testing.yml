@@ -10,7 +10,7 @@ on:
         default: 0
       submodules-refs:
         type: string
-        description: "Lines with submodules' repo names and refs (e.g. `org/repo: ref`)"
+        description: "List of submodules' repo names and refs (e.g. `org/repo: ref`, one per line)"
         required: false
       targets:
         type: string
@@ -20,7 +20,34 @@ on:
         type: string
         description: "Version of Boost to install"
         required: false
-        default: '1.81.0' # The least version supported by both matrix.os
+        default: '1.81.0' # The least version supported by both defaulted matrix.os
+
+      # Matrix configuration
+      # Default runs the following 4 configurations:
+      # 1. <Linux, Release, latest G++ compiler toolchain on the default runner image, default generator>
+      # 2. <Linux, Release, latest Clang++ compiler toolchain on the default runner image, default generator>
+      # 3. <MacOS, Release, latest G++ compiler toolchain on the default runner image, default generator>
+      # 4. <MacOS, Release, latest Clang++ compiler toolchain on the default runner image, default generator>
+      os:
+        description: 'List of operating systems to run the workflow on (one per line)'
+        required: false
+        type: string
+        default: |
+          ubuntu-22.04
+          macos-12
+      cpp_compiler:
+        description: 'List of C++ compilers to use for building (one per line)'
+        required: false
+        type: string
+        default: |
+          g++
+          clang++
+      build_type:
+        description: 'Build type (e.g., Release, Debug, one per line)'
+        required: false
+        type: string
+        default: |
+          Release
 
 env:
   TESTS_ARTIFACT_NAME: 'test-results'
@@ -43,15 +70,10 @@ jobs:
     name: "Build and Test using Matrix"
     runs-on: ${{ matrix.os }}
     strategy:
-      # Set up a matrix to run the following 4 configurations:
-      # 1. <Linux, Release, latest G++ compiler toolchain on the default runner image, default generator>
-      # 2. <Linux, Release, latest Clang++ compiler toolchain on the default runner image, default generator>
-      # 3. <MacOS, Release, latest G++ compiler toolchain on the default runner image, default generator>
-      # 4. <MacOS, Release, latest Clang++ compiler toolchain on the default runner image, default generator>
       matrix:
-        os: [ubuntu-22.04, macos-12]
-        cpp_compiler: [g++, clang++]
-        build_type: [Release]
+        os: ${{ fromJson('["' + join(split(inputs.os, '\n'), '","') + '"]') | map(trim) | toJson }}
+        cpp_compiler: ${{ fromJson('["' + join(split(inputs.cpp_compiler, '\n'), '","') + '"]') | map(trim) | toJson }}
+        build_type: ${{ fromJson('["' + join(split(inputs.build_type, '\n'), '","') + '"]') | map(trim) | toJson }}
     steps:
       - name: Checkout Crypto3 repository
         uses: actions/checkout@v4
@@ -97,23 +119,23 @@ jobs:
           echo "dependencies-dir=${{ github.workspace }}/../dependencies" >> "$GITHUB_OUTPUT"
 
           # Get platform version
-          os_version=${{ matrix.os }}
-          platform_version=${os_version##*-}
+          if [[ ${{ runner.os }} == 'Linux' ]]; then
+            platform_version=$(lsb_release -rs)
+            proc_number=$(nproc)
+          elif [[ ${{ runner.os }} == 'macOS' ]]; then
+            platform_version=$(sw_vers -productVersion)
+            proc_number=$(sysctl -n hw.logicalcpu)
+          fi
           echo "platform-version=${platform_version}" >> $GITHUB_OUTPUT
 
           if [ "${{ inputs.concurrency }}" = "0" ]; then
-            echo "Setting concurrency to number of logical cores"
-            if [[ ${{ runner.os }} == 'Linux' ]]; then
-              proc_number=$(nproc)
-            elif [[ ${{ runner.os }} == 'macOS' ]]; then
-              proc_number=$(sysctl -n hw.logicalcpu)
-            fi
+            echo "Setting concurrency to number of logical cores (${proc_number})"
           else
             echo "Setting concurrency to user-defined value"
             proc_number=${{ inputs.concurrency }}
           fi
-
           echo "proc-number=${proc_number}" >> $GITHUB_OUTPUT
+
 
       - name: Set up dependencies directory
         run: |
